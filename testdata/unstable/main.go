@@ -23,8 +23,21 @@ func init() {
 func main() {
 	// Array of functions to be called
 	functions := []func(){
-		aggregateUnstable,
+		// client functions
+		watchClient,
+
+		// collection functions
+		aggregateUnstable1,
+		aggregateUnstable2,
+		aggregateUnstable3,
+		aggregateUnstable4,
+		aggregateUnstable5,
+		distinct,
+		searchIndexes,
 		watchCollection,
+
+		// database functions
+		watchDatabase,
 	}
 
 	// Execute each function

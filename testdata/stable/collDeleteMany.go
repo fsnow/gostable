@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func deleteDocuments() {
+func deleteMany() {
 	collection := client.Database("mydatabase").Collection("mycollection")
 
 	// Delete documents

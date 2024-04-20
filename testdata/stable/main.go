@@ -20,12 +20,73 @@ func init() {
 	}
 }
 
+/*
+Notes:
+The following functions are client-side only, server no-ops:
+Collection functions Clone(), Database(), Name()
+Database functions: Collection(), Client(), Name(), ReadConcern(), ReadPreference()
+*/
+
+/*
+TODO:
+Database.RunCommand
+Database.RunCommandCursor
+*/
+
+/*
+These need "Stable" and "Unstable" test cases:
+
+Collection.Aggregate (TODO)
+https://www.mongodb.com/docs/manual/reference/command/aggregate/#stable-api
+Aggregate has limitations on stages
+
+Database.CreateCollection (TODO)
+Database.CreateView (TODO, needs investigation)
+https://www.mongodb.com/docs/manual/reference/command/create/#stable-api
+Collection create does not allow 6 fields
+Hard for analysis of direct runCommand, think of all the ways that this could be constructed, maybe in a different module
+
+Collection.Find() and Collection.FindOne()
+https://www.mongodb.com/docs/manual/reference/command/find/#stable-api
+Collection find does not allow 8 fields
+
+
+*/
+
+// stable
 func main() {
 	// Array of functions to be called
 	functions := []func(){
+		// client functions
+		listDatabaseNames,
+		listDatabases,
+		ping,
+
+		// collection functions
 		aggregateStable,
-		findDocuments,
-		deleteDocuments,
+		bulkWrite,
+		countDocuments,
+		deleteMany,
+		deleteOne,
+		drop,
+		estimatedDocumentCount,
+		findStable,
+		findOneStable,
+		findOneAndDelete,
+		findOneAndReplace,
+		findOneAndUpdate,
+		indexes,
+		insertMany,
+		insertOne,
+		replaceOne,
+		updateByID,
+		updateMany,
+		updateOne,
+
+		// database functions
+		listCollectionNames,
+		listCollections,
+		listCollectionSpecifications,
 	}
 
 	// Execute each function
