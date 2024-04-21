@@ -8,7 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func findDocuments() {
+func find() {
 	collection := client.Database("mydatabase").Collection("mycollection")
 
 	// Find documents

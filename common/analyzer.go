@@ -25,37 +25,74 @@ var Analyzer = &analysis.Analyzer{
 func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
-	nodeFilter := []ast.Node{
+	callExprNodeFilter := []ast.Node{
 		(*ast.CallExpr)(nil),
 	}
 
 	unstableFunctions := map[string][]string{
-		"Client":     {"Watch"},
-		"Collection": {"Distinct", "SearchIndexes", "Watch"},
-		"Database":   {"Watch"},
+		"Client":                  {"Watch"},
+		"Collection":              {"Distinct", "SearchIndexes", "Watch"},
+		"Database":                {"Watch"},
+		"CreateCollectionOptions": {"SetCapped", "SetDefaultIndexOptions", "SetMaxDocuments", "SetSizeInBytes", "SetStorageEngine"},
+		"FindOneAndDeleteOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+			"SetShowRecordID"},
+		"FindOneAndReplaceOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+			"SetShowRecordID"},
+		"FindOneAndUpdateOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+			"SetShowRecordID"},
+		"FindOneOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+			"SetShowRecordID"},
+		"FindOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+			"SetShowRecordID"},
+		"IndexOptions": {"SetBackground", "SetBucketSize", "SetSparse", "SetStorageEngine"},
+	}
+
+	// TODO: CursorType.Tailable or CursorType.TailableAwait; check on FindOptions.SetCursorType() ?
+
+	restrictedStagesNodeFilter := []ast.Node{
+		(*ast.BasicLit)(nil),
+		//(*ast.KeyValueExpr)(nil),
 	}
 
 	restrictedStages := []string{"$currentOp", "$indexStats", "$listLocalSessions", "$listSessions", "$planCacheStats", "$search"}
-	restrictedOperators := map[string][]string{
-		"$group":   {"$sum", "$avg"},
-		"$project": {"$add", "$multiply"},
-	}
+	/*
+		restrictedOperators := map[string][]string{
+			"$group":   {"$sum", "$avg"},
+			"$project": {"$add", "$multiply"},
+		}
+	*/
 
-	mongoCollection := mongoPkgName + ".Collection"
-	inspect.Preorder(nodeFilter, func(node ast.Node) {
-		call := node.(*ast.CallExpr)
+	/*
 		if isPkgDotFunction(pass, call, mongoCollection, "Aggregate") {
 			fmt.Println("\nPreorder, Aggregate")
 			if hasRestrictedStages(pass, call, restrictedStages, restrictedOperators) {
 				pass.Reportf(call.Pos(), "usage of restricted pipeline stages detected")
 			}
 		}
+	*/
 
+	//mongoCollection := mongoPkgName + ".Collection"
+	inspect.Preorder(callExprNodeFilter, func(node ast.Node) {
+		call := node.(*ast.CallExpr)
 		for driverType, functions := range unstableFunctions {
 			for _, fnName := range functions {
 				pkgName := mongoPkgName + "." + driverType
 				if isPkgDotFunction(pass, call, pkgName, fnName) {
 					pass.Reportf(call.Pos(), "use of %v.%v is not supported by the MongoDB Stable API", driverType, fnName)
+				}
+			}
+		}
+	})
+
+	inspect.Preorder(restrictedStagesNodeFilter, func(node ast.Node) {
+		switch x := node.(type) {
+		case *ast.BasicLit:
+			if x.Kind == token.STRING {
+				//fmt.Printf("string value: %v\n", x.Value)
+				for _, target := range restrictedStages {
+					if strings.Contains(x.Value, target) {
+						pass.Reportf(x.Pos(), "Aggregation stage '%s' is not supported by the MongoDB Stable API", target)
+					}
 				}
 			}
 		}

@@ -32,7 +32,9 @@ func main() {
 		aggregateUnstable3,
 		aggregateUnstable4,
 		aggregateUnstable5,
+		aggregateUnstable6,
 		distinct,
+		find,
 		searchIndexes,
 		watchCollection,
 

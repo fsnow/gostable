@@ -149,9 +149,45 @@ func aggregateUnstable5() {
 
 	// Define the aggregation pipelines
 	pipelines := []mongo.Pipeline{
-		// Pipeline 1: Single $match stage
 		{{
 			{Key: "$currentOp", Value: bson.D{}},
+		}},
+	}
+
+	// Iterate over the pipelines and execute the aggregation
+	for _, pipeline := range pipelines {
+		cursor, err := collection.Aggregate(context.Background(), pipeline)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer cursor.Close(context.Background())
+
+		// Iterate over the aggregation results
+		for cursor.Next(context.Background()) {
+			var result bson.M
+			err := cursor.Decode(&result)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println(result)
+		}
+
+		if err := cursor.Err(); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+// Pipeline where key is in a separate variable
+func aggregateUnstable6() {
+	collection := client.Database("mydatabase").Collection("mycollection")
+
+	key := "$currentOp"
+
+	// Define the aggregation pipelines
+	pipelines := []mongo.Pipeline{
+		{{
+			{Key: key, Value: bson.D{}},
 		}},
 	}
 

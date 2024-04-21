@@ -40,13 +40,16 @@ Collection.Aggregate (TODO)
 https://www.mongodb.com/docs/manual/reference/command/aggregate/#stable-api
 Aggregate has limitations on stages
 
-Database.CreateCollection (TODO)
-Database.CreateView (TODO, needs investigation)
+Database.CreateCollection
 https://www.mongodb.com/docs/manual/reference/command/create/#stable-api
 Collection create does not allow 6 fields
 Hard for analysis of direct runCommand, think of all the ways that this could be constructed, maybe in a different module
 
-Collection.Find() and Collection.FindOne()
+Database.CreateIndex
+https://www.mongodb.com/docs/manual/reference/command/createIndexes/#stable-api
+createIndexes does not allow 4 fields
+
+Collection.Find() and Collection.FindOne*()
 https://www.mongodb.com/docs/manual/reference/command/find/#stable-api
 Collection find does not allow 8 fields
 
