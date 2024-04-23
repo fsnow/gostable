@@ -84,32 +84,17 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 	*/
 
-	callExprNodeFilter := []ast.Node{
-		(*ast.CallExpr)(nil),
-	}
-
-	// loop over all function calls and check against unstableFunctions map
-	inspect.Preorder(callExprNodeFilter, func(node ast.Node) {
-		call := node.(*ast.CallExpr)
-		for pkg, driverFnMap := range unstableFunctions {
-			for driverType, fnNames := range driverFnMap {
-				for _, fnName := range fnNames {
-					fullPkg := pkg + "." + driverType
-					if isPkgDotFunction(pass, call, fullPkg, fnName) {
-						pass.Reportf(call.Pos(), "use of %v.%v is not supported by the MongoDB Stable API", driverType, fnName)
-					}
-				}
-			}
-		}
-	})
-
-	basicLitNodeFilter := []ast.Node{
+	nodeFilter := []ast.Node{
 		(*ast.BasicLit)(nil),
+		(*ast.CallExpr)(nil),
+		(*ast.CompositeLit)(nil),
+		(*ast.SelectorExpr)(nil),
 	}
 
-	// looks for any of the restricted aggregation stages as a string
-	inspect.Preorder(basicLitNodeFilter, func(node ast.Node) {
+	inspect.Preorder(nodeFilter, func(node ast.Node) {
 		switch x := node.(type) {
+
+		// look for any of the restricted aggregation stages as a string
 		case *ast.BasicLit:
 			if x.Kind == token.STRING {
 				//fmt.Printf("string value: %v\n", x.Value)
@@ -119,65 +104,70 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					}
 				}
 			}
-		}
-	})
 
-	selectorExprNodeFilter := []ast.Node{
-		(*ast.SelectorExpr)(nil),
-	}
-
-	inspect.Preorder(selectorExprNodeFilter, func(node ast.Node) {
-		selExpr := node.(*ast.SelectorExpr)
-
-		xIdent, ok := selExpr.X.(*ast.Ident)
-		if !ok {
-			return
-		}
-
-		if xIdent.Name != "CursorType" {
-			return
-		}
-
-		switch selExpr.Sel.Name {
-		case "Tailable", "TailableAwait":
-			pass.Reportf(node.Pos(), "Usage of CursorType.%s", selExpr.Sel.Name)
-		}
-	})
-
-	compositeLitNodeFilter := []ast.Node{
-		(*ast.CompositeLit)(nil),
-	}
-
-	inspect.Preorder(compositeLitNodeFilter, func(n ast.Node) {
-		compLit, ok := n.(*ast.CompositeLit)
-		if !ok {
-			return
-		}
-
-		packageName, structName, ok := getStructInfo(pass, compLit.Type)
-		if !ok {
-			return
-		}
-
-		if packageName != optsPkgName {
-			return
-		}
-
-		members, ok := unstableOptionsStructs[structName]
-		if !ok {
-			return
-		}
-
-		for _, elt := range compLit.Elts {
-			if kv, ok := elt.(*ast.KeyValueExpr); ok {
-				if ident, ok := kv.Key.(*ast.Ident); ok {
-					for _, member := range members {
-						if ident.Name == member {
-							pass.Reportf(n.Pos(), "%s.%s is not supported by the MongoDB Stable API", structName, member)
-							break
+		// loop over all function calls and check against unstableFunctions map
+		case *ast.CallExpr:
+			call := node.(*ast.CallExpr)
+			for pkg, driverFnMap := range unstableFunctions {
+				for driverType, fnNames := range driverFnMap {
+					for _, fnName := range fnNames {
+						fullPkg := pkg + "." + driverType
+						if isPkgDotFunction(pass, call, fullPkg, fnName) {
+							pass.Reportf(call.Pos(), "Function %v.%v is not supported by the MongoDB Stable API", driverType, fnName)
 						}
 					}
 				}
+			}
+
+		// look for any unsupported struct fields
+		case *ast.CompositeLit:
+			compLit, ok := node.(*ast.CompositeLit)
+			if !ok {
+				return
+			}
+
+			packageName, structName, ok := getStructInfo(pass, compLit.Type)
+			if !ok {
+				return
+			}
+
+			if packageName != optsPkgName {
+				return
+			}
+
+			members, ok := unstableOptionsStructs[structName]
+			if !ok {
+				return
+			}
+
+			for _, elt := range compLit.Elts {
+				if kv, ok := elt.(*ast.KeyValueExpr); ok {
+					if ident, ok := kv.Key.(*ast.Ident); ok {
+						for _, member := range members {
+							if ident.Name == member {
+								pass.Reportf(node.Pos(), "Struct field %s.%s is not supported by the MongoDB Stable API", structName, member)
+								break
+							}
+						}
+					}
+				}
+			}
+
+		case *ast.SelectorExpr:
+			selExpr := node.(*ast.SelectorExpr)
+
+			xIdent, ok := selExpr.X.(*ast.Ident)
+			if !ok {
+				return
+			}
+
+			if xIdent.Name != "CursorType" {
+				return
+			}
+
+			switch selExpr.Sel.Name {
+			case "Tailable", "TailableAwait":
+				pass.Reportf(node.Pos(), "Struct field CursorType.%s", selExpr.Sel.Name)
 			}
 		}
 	})
