@@ -52,6 +52,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	unstableOptionsStructs := map[string][]string{
 		"CreateCollectionOptions": {"Capped", "DefaultIndexOptions", "MaxDocuments", "SizeInBytes", "StorageEngine"},
+		"CursorType":              {"Tailable", "TailableAwait"},
 		"FindOneAndDeleteOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
 			"ShowRecordID"},
 		"FindOneAndReplaceOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
@@ -156,18 +157,27 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		case *ast.SelectorExpr:
 			selExpr := node.(*ast.SelectorExpr)
 
-			xIdent, ok := selExpr.X.(*ast.Ident)
-			if !ok {
-				return
-			}
-
-			if xIdent.Name != "CursorType" {
-				return
-			}
-
 			switch selExpr.Sel.Name {
 			case "Tailable", "TailableAwait":
-				pass.Reportf(node.Pos(), "Struct field CursorType.%s", selExpr.Sel.Name)
+				xIdent, ok := selExpr.X.(*ast.Ident)
+				if !ok {
+					return
+				}
+
+				typ := pass.TypesInfo.TypeOf(xIdent)
+				if typ == nil {
+					return
+				}
+
+				if named, ok := typ.(*types.Named); ok {
+					obj := named.Obj()
+					pkg := obj.Pkg()
+					if pkg == nil || pkg.Path() != optsPkgName {
+						return
+					}
+				}
+
+				pass.Reportf(node.Pos(), "Struct field CursorType.%s is not supported by the MongoDB Stable API", selExpr.Sel.Name)
 			}
 		}
 	})
