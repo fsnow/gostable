@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -12,6 +13,8 @@ import (
 )
 
 const mongoPkgName = "go.mongodb.org/mongo-driver/mongo"
+
+const optsPkgName = "go.mongodb.org/mongo-driver/mongo/options"
 
 var Analyzer = &analysis.Analyzer{
 	Name: "gostable",
@@ -25,34 +28,44 @@ var Analyzer = &analysis.Analyzer{
 func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
-	callExprNodeFilter := []ast.Node{
-		(*ast.CallExpr)(nil),
+	unstableFunctions := map[string]map[string][]string{
+		mongoPkgName: {
+			"Client":     {"Watch"},
+			"Collection": {"Distinct", "SearchIndexes", "Watch"},
+			"Database":   {"Watch"},
+		},
+		optsPkgName: {
+			"CreateCollectionOptions": {"SetCapped", "SetDefaultIndexOptions", "SetMaxDocuments", "SetSizeInBytes", "SetStorageEngine"},
+			"FindOneAndDeleteOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+				"SetShowRecordID"},
+			"FindOneAndReplaceOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+				"SetShowRecordID"},
+			"FindOneAndUpdateOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+				"SetShowRecordID"},
+			"FindOneOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+				"SetShowRecordID"},
+			"FindOptions": {"SetCursorType", "SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
+				"SetShowRecordID"},
+			"IndexOptions": {"SetBackground", "SetBucketSize", "SetSparse", "SetStorageEngine"},
+		},
 	}
 
-	unstableFunctions := map[string][]string{
-		"Client":                  {"Watch"},
-		"Collection":              {"Distinct", "SearchIndexes", "Watch"},
-		"Database":                {"Watch"},
-		"CreateCollectionOptions": {"SetCapped", "SetDefaultIndexOptions", "SetMaxDocuments", "SetSizeInBytes", "SetStorageEngine"},
-		"FindOneAndDeleteOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
-			"SetShowRecordID"},
-		"FindOneAndReplaceOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
-			"SetShowRecordID"},
-		"FindOneAndUpdateOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
-			"SetShowRecordID"},
-		"FindOneOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
-			"SetShowRecordID"},
-		"FindOptions": {"SetMax", "SetMaxAwaitTime", "SetMin", "SetNoCursorTimeout", "SetOplogReplay", "SetReturnKey",
-			"SetShowRecordID"},
-		"IndexOptions": {"SetBackground", "SetBucketSize", "SetSparse", "SetStorageEngine"},
+	unstableOptionsStructs := map[string][]string{
+		"CreateCollectionOptions": {"Capped", "DefaultIndexOptions", "MaxDocuments", "SizeInBytes", "StorageEngine"},
+		"FindOneAndDeleteOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
+			"ShowRecordID"},
+		"FindOneAndReplaceOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
+			"ShowRecordID"},
+		"FindOneAndUpdateOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
+			"ShowRecordID"},
+		"FindOneOptions": {"Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
+			"ShowRecordID"},
+		"FindOptions": {"CursorType", "Max", "MaxAwaitTime", "Min", "NoCursorTimeout", "OplogReplay", "ReturnKey",
+			"ShowRecordID"},
+		"IndexOptions": {"Background", "BucketSize", "Sparse", "StorageEngine"},
 	}
 
-	// TODO: CursorType.Tailable or CursorType.TailableAwait; check on FindOptions.SetCursorType() ?
-
-	restrictedStagesNodeFilter := []ast.Node{
-		(*ast.BasicLit)(nil),
-		//(*ast.KeyValueExpr)(nil),
-	}
+	// TODO: options.Find().SetCursorType(options.TailableAwait), only form of FindOptions not supported as of 4/22
 
 	restrictedStages := []string{"$currentOp", "$indexStats", "$listLocalSessions", "$listSessions", "$planCacheStats", "$search"}
 	/*
@@ -71,20 +84,31 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 	*/
 
-	//mongoCollection := mongoPkgName + ".Collection"
+	callExprNodeFilter := []ast.Node{
+		(*ast.CallExpr)(nil),
+	}
+
+	// loop over all function calls and check against unstableFunctions map
 	inspect.Preorder(callExprNodeFilter, func(node ast.Node) {
 		call := node.(*ast.CallExpr)
-		for driverType, functions := range unstableFunctions {
-			for _, fnName := range functions {
-				pkgName := mongoPkgName + "." + driverType
-				if isPkgDotFunction(pass, call, pkgName, fnName) {
-					pass.Reportf(call.Pos(), "use of %v.%v is not supported by the MongoDB Stable API", driverType, fnName)
+		for pkg, driverFnMap := range unstableFunctions {
+			for driverType, fnNames := range driverFnMap {
+				for _, fnName := range fnNames {
+					fullPkg := pkg + "." + driverType
+					if isPkgDotFunction(pass, call, fullPkg, fnName) {
+						pass.Reportf(call.Pos(), "use of %v.%v is not supported by the MongoDB Stable API", driverType, fnName)
+					}
 				}
 			}
 		}
 	})
 
-	inspect.Preorder(restrictedStagesNodeFilter, func(node ast.Node) {
+	basicLitNodeFilter := []ast.Node{
+		(*ast.BasicLit)(nil),
+	}
+
+	// looks for any of the restricted aggregation stages as a string
+	inspect.Preorder(basicLitNodeFilter, func(node ast.Node) {
 		switch x := node.(type) {
 		case *ast.BasicLit:
 			if x.Kind == token.STRING {
@@ -98,7 +122,83 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 	})
 
+	selectorExprNodeFilter := []ast.Node{
+		(*ast.SelectorExpr)(nil),
+	}
+
+	inspect.Preorder(selectorExprNodeFilter, func(node ast.Node) {
+		selExpr := node.(*ast.SelectorExpr)
+
+		xIdent, ok := selExpr.X.(*ast.Ident)
+		if !ok {
+			return
+		}
+
+		if xIdent.Name != "CursorType" {
+			return
+		}
+
+		switch selExpr.Sel.Name {
+		case "Tailable", "TailableAwait":
+			pass.Reportf(node.Pos(), "Usage of CursorType.%s", selExpr.Sel.Name)
+		}
+	})
+
+	compositeLitNodeFilter := []ast.Node{
+		(*ast.CompositeLit)(nil),
+	}
+
+	inspect.Preorder(compositeLitNodeFilter, func(n ast.Node) {
+		compLit, ok := n.(*ast.CompositeLit)
+		if !ok {
+			return
+		}
+
+		packageName, structName, ok := getStructInfo(pass, compLit.Type)
+		if !ok {
+			return
+		}
+
+		if packageName != optsPkgName {
+			return
+		}
+
+		members, ok := unstableOptionsStructs[structName]
+		if !ok {
+			return
+		}
+
+		for _, elt := range compLit.Elts {
+			if kv, ok := elt.(*ast.KeyValueExpr); ok {
+				if ident, ok := kv.Key.(*ast.Ident); ok {
+					for _, member := range members {
+						if ident.Name == member {
+							pass.Reportf(n.Pos(), "%s.%s is not supported by the MongoDB Stable API", structName, member)
+							break
+						}
+					}
+				}
+			}
+		}
+	})
+
 	return nil, nil
+}
+
+func getStructInfo(pass *analysis.Pass, expr ast.Expr) (string, string, bool) {
+	typ := pass.TypesInfo.TypeOf(expr)
+	if typ == nil {
+		return "", "", false
+	}
+
+	if named, ok := typ.(*types.Named); ok {
+		obj := named.Obj()
+		if pkg := obj.Pkg(); pkg != nil {
+			return pkg.Path(), obj.Name(), true
+		}
+	}
+
+	return "", "", false
 }
 
 func isPkgDotFunction(pass *analysis.Pass, call *ast.CallExpr, packagePath, functionName string) bool {
@@ -116,13 +216,11 @@ func isPkgDotFunction(pass *analysis.Pass, call *ast.CallExpr, packagePath, func
 	// Check if the selector's X expression is a package identifier
 	_, ok = selExpr.X.(*ast.Ident)
 	if !ok {
-		fmt.Println("1")
 		return false
 	}
 
 	typ := pass.TypesInfo.TypeOf(selExpr.X)
 	if typ == nil {
-		fmt.Println("2")
 		return false
 	}
 
