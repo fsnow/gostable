@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -147,6 +146,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			call := node.(*ast.CallExpr)
 			callPkgName, callFnName := pkgPathDotTypeAndFunction(pass, call)
 			if (callPkgName == fullClientPkg || callPkgName == fullDbPkg) && callFnName == "RunCommand" {
+				pass.Reportf(call.Pos(), "Any use of RunCommand should be reviewed against the MongoDB Stable API command list")
 				analyzeRunCommand(pass, call)
 			} else {
 				for pkg, driverFnMap := range unstableFunctions {
@@ -187,7 +187,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					if ident, ok := kv.Key.(*ast.Ident); ok {
 						for _, member := range members {
 							if ident.Name == member {
-								pass.Reportf(node.Pos(), "Struct field %s.%s is not supported by the MongoDB Stable API", structName, member)
+								pass.Reportf(ident.Pos(), "Struct field %s.%s is not supported by the MongoDB Stable API", structName, member)
 								break
 							}
 						}
@@ -269,7 +269,7 @@ func pkgPathDotTypeAndFunction(pass *analysis.Pass, call *ast.CallExpr) (string,
 }
 
 func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
-	fmt.Println("In analyzeRunCommand")
+	//fmt.Println("In analyzeRunCommand")
 	// Get the command argument (second argument)
 	if len(call.Args) < 2 {
 		return
@@ -278,25 +278,25 @@ func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
 
 	// Check if the command argument is a bson.D literal
 	if bsonDLit, ok := cmdArg.(*ast.CompositeLit); ok {
-		fmt.Println("CompositeLit")
+		//fmt.Println("CompositeLit")
 		if isBsonDType(pass.TypesInfo.TypeOf(bsonDLit)) {
 			// Analyze the bson.D literal
-			fmt.Println("analyzeCommandLiteral 1")
+			//fmt.Println("analyzeCommandLiteral 1")
 			analyzeCommandLiteral(pass, bsonDLit)
 			return
 		}
 	} else {
 		// Check if the command argument is a variable
 		if ident, ok := cmdArg.(*ast.Ident); ok {
-			fmt.Println("Ident")
+			//fmt.Println("Ident")
 			if isBsonDType(pass.TypesInfo.ObjectOf(ident).Type()) {
-				fmt.Println("isBsonDType")
+				//fmt.Println("isBsonDType")
 				// Find the variable declaration and analyze its value
 				if assignStmt := findVariableAssignment(pass, ident); assignStmt != nil {
-					fmt.Println("assignStmt != nil")
+					//fmt.Println("assignStmt != nil")
 					if bsonDLit, ok := assignStmt.Rhs[0].(*ast.CompositeLit); ok {
-						fmt.Println("analyzeCommandLiteral 2")
-						fmt.Printf("bsonDLit %v\n", bsonDLit.Type)
+						//fmt.Println("analyzeCommandLiteral 2")
+						//fmt.Printf("bsonDLit %v\n", bsonDLit.Type)
 
 						analyzeCommandLiteral(pass, bsonDLit)
 					}
@@ -309,16 +309,19 @@ func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
 func isBsonDType(typ types.Type) bool {
 	// Check if the type is bson.D or a compatible type
 	// You can customize this based on your specific requirements
-	fmt.Printf("typ: %v\n", typ.String())
+	//fmt.Printf("typ: %v\n", typ.String())
 	return typ.String() == "bson.D" || typ.String() == "go.mongodb.org/mongo-driver/bson/primitive.D"
 }
 
 func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident) *ast.AssignStmt {
 	var assignStmt *ast.AssignStmt
 
-	// Find the assignment statement for the given identifier
-	for _, file := range pass.Files {
-		ast.Inspect(file, func(node ast.Node) bool {
+	// Find the function declaration containing the identifier
+	funcDecl := findFunctionDeclaration(pass, ident)
+
+	// First, search for the assignment statement within the function
+	if funcDecl != nil {
+		ast.Inspect(funcDecl, func(node ast.Node) bool {
 			switch stmt := node.(type) {
 			case *ast.AssignStmt:
 				for _, lhs := range stmt.Lhs {
@@ -330,17 +333,70 @@ func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident) *ast.AssignSt
 			}
 			return true
 		})
+	}
 
-		if assignStmt != nil {
-			break
+	// If the assignment statement is not found within the function, search in outer scopes
+	if assignStmt == nil {
+		for _, file := range pass.Files {
+			ast.Inspect(file, func(node ast.Node) bool {
+				switch stmt := node.(type) {
+				case *ast.AssignStmt:
+					for _, lhs := range stmt.Lhs {
+						if lhsIdent, ok := lhs.(*ast.Ident); ok && lhsIdent.Name == ident.Name {
+							assignStmt = stmt
+							return false
+						}
+					}
+				}
+				return true
+			})
+
+			if assignStmt != nil {
+				break
+			}
 		}
 	}
 
 	return assignStmt
 }
 
+func findFunctionDeclaration(pass *analysis.Pass, ident *ast.Ident) *ast.FuncDecl {
+	var funcDecl *ast.FuncDecl
+
+	// Find the function declaration containing the identifier
+	for _, file := range pass.Files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			if fd, ok := node.(*ast.FuncDecl); ok {
+				if containsIdent(fd, ident) {
+					funcDecl = fd
+					return false
+				}
+			}
+			return true
+		})
+
+		if funcDecl != nil {
+			break
+		}
+	}
+
+	return funcDecl
+}
+
+func containsIdent(node ast.Node, ident *ast.Ident) bool {
+	var found bool
+	ast.Inspect(node, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Name == ident.Name {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 func analyzeCommandLiteral(pass *analysis.Pass, x *ast.CompositeLit) {
-	fmt.Println("Inside analyzeCommandLiteral")
+	//fmt.Println("Inside analyzeCommandLiteral")
 
 	if x.Type != nil {
 		switch t := x.Type.(type) {
@@ -472,22 +528,22 @@ func hasRestrictedStages(pass *analysis.Pass, call *ast.CallExpr, restrictedStag
 		switch arg := arg.(type) {
 		case *ast.Ident:
 			bsonDocs = findPipelineVariable(pass, arg.Name, call.Pos())
-			fmt.Println("ast.Ident case")
-			fmt.Printf("len: %v\n", len(bsonDocs))
+			//fmt.Println("ast.Ident case")
+			//fmt.Printf("len: %v\n", len(bsonDocs))
 		case *ast.CompositeLit:
 			if arg.Type == nil {
 				bsonDocs = extractBSONDocs(arg.Elts)
-				fmt.Println("ast.CompositeLit case, if")
+				//fmt.Println("ast.CompositeLit case, if")
 			} else if ident, ok := arg.Type.(*ast.ArrayType); ok && ident.Elt != nil {
 				if _, ok := ident.Elt.(*ast.StructType); ok {
 					bsonDocs = extractBSONDocs(arg.Elts)
-					fmt.Println("ast.CompositeLit case, else if if")
+					//fmt.Println("ast.CompositeLit case, else if if")
 				}
 			}
 		case *ast.CallExpr:
 			if sel, ok := arg.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Pipeline" {
 				bsonDocs = extractBSONDocsFromPipeline(arg.Args)
-				fmt.Println("ast.CallExpr case")
+				//fmt.Println("ast.CallExpr case")
 			}
 		}
 
@@ -503,8 +559,8 @@ func hasRestrictedStages(pass *analysis.Pass, call *ast.CallExpr, restrictedStag
 func findPipelineVariable(pass *analysis.Pass, varName string, pos token.Pos) []*ast.CompositeLit {
 	var bsonDocs []*ast.CompositeLit
 
-	fmt.Printf("findPipelineVariable, varName=%v\n", varName)
-	fmt.Printf("pass.Files len: %v\n", len(pass.Files))
+	//fmt.Printf("findPipelineVariable, varName=%v\n", varName)
+	//fmt.Printf("pass.Files len: %v\n", len(pass.Files))
 
 	var spec *ast.ValueSpec
 	for _, file := range pass.Files {
@@ -525,7 +581,7 @@ func findPipelineVariable(pass *analysis.Pass, varName string, pos token.Pos) []
 					if ident, ok := lhs.(*ast.Ident); ok && ident.Name == varName {
 						if len(n.Rhs) == 1 {
 							if compositeLit, ok := n.Rhs[0].(*ast.CompositeLit); ok {
-								fmt.Println("before append 1")
+								//fmt.Println("before append 1")
 								bsonDocs = append(bsonDocs, extractBSONDocs(compositeLit.Elts)...)
 							}
 						}
@@ -543,7 +599,7 @@ func findPipelineVariable(pass *analysis.Pass, varName string, pos token.Pos) []
 	if spec != nil {
 		for _, value := range spec.Values {
 			if compositeLit, ok := value.(*ast.CompositeLit); ok {
-				fmt.Println("before append 2")
+				//fmt.Println("before append 2")
 				bsonDocs = append(bsonDocs, extractBSONDocs(compositeLit.Elts)...)
 			}
 		}

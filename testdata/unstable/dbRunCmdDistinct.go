@@ -44,7 +44,7 @@ func runCmdDistinct2() {
 	field := "category"
 
 	// Create the "distinct" command
-	distinctCommand2 := bson.D{
+	distinctCommand := bson.D{
 		bson.E{Key: "distinct", Value: "value1"},
 		bson.E{Key: "field2", Value: 42},
 		bson.E{Key: "field3", Value: true},
@@ -52,7 +52,7 @@ func runCmdDistinct2() {
 
 	// Execute the "distinct" command
 	var result bson.M
-	err := db.RunCommand(context.Background(), distinctCommand2).Decode(&result)
+	err := db.RunCommand(context.Background(), distinctCommand).Decode(&result)
 	if err != nil {
 		log.Fatal(err)
 	}
