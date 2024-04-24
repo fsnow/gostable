@@ -82,6 +82,7 @@ func main() {
 		insertMany,
 		insertOne,
 		replaceOne,
+		runCmdCount,
 		updateByID,
 		updateMany,
 		updateOne,

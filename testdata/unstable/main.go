@@ -33,6 +33,8 @@ func main() {
 		aggregateUnstable4,
 		aggregateUnstable5,
 		aggregateUnstable6,
+		runCmdDistinct1,
+		runCmdDistinct2,
 		distinct,
 		find1,
 		find2,
