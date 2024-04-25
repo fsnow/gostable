@@ -67,13 +67,6 @@ var unstableOptionsStructs = map[string][]string{
 
 var restrictedStages = []string{"$currentOp", "$indexStats", "$listLocalSessions", "$listSessions", "$planCacheStats", "$search"}
 
-/*
-	restrictedOperators := map[string][]string{
-		"$group":   {"$sum", "$avg"},
-		"$project": {"$add", "$multiply"},
-	}
-*/
-
 // commands that are supported without limitations or caveats
 var stableCommands = []string{"count", "abortTransaction", "authenticate", "bulkWrite", "collMod", "commitTransaction",
 	"delete", "drop", "dropDatabase", "dropIndexes", "endSessions", "findAndModify", "getMore", "insert", "hello",
@@ -127,7 +120,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		(*ast.SelectorExpr)(nil),
 	}
 
-	inspect.Preorder(nodeFilter, func(node ast.Node) {
+	inspect.WithStack(nodeFilter, func(node ast.Node, push bool, stack []ast.Node) bool {
+		if push {
+			return true
+		}
 		switch x := node.(type) {
 
 		// look for any of the restricted aggregation stages as a string
@@ -147,7 +143,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			callPkgName, callFnName := pkgPathDotTypeAndFunction(pass, call)
 			if (callPkgName == fullClientPkg || callPkgName == fullDbPkg) && callFnName == "RunCommand" {
 				pass.Reportf(call.Pos(), "Any use of RunCommand should be reviewed against the MongoDB Stable API command list")
-				analyzeRunCommand(pass, call)
+				analyzeRunCommand(pass, call, stack)
 			} else {
 				for pkg, driverFnMap := range unstableFunctions {
 					for driverType, fnNames := range driverFnMap {
@@ -165,21 +161,21 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		case *ast.CompositeLit:
 			compLit, ok := node.(*ast.CompositeLit)
 			if !ok {
-				return
+				return false
 			}
 
 			packageName, structName, ok := getStructInfo(pass, compLit.Type)
 			if !ok {
-				return
+				return false
 			}
 
 			if packageName != optsPkgName {
-				return
+				return false
 			}
 
 			members, ok := unstableOptionsStructs[structName]
 			if !ok {
-				return
+				return false
 			}
 
 			for _, elt := range compLit.Elts {
@@ -202,25 +198,26 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			case "Tailable", "TailableAwait":
 				xIdent, ok := selExpr.X.(*ast.Ident)
 				if !ok {
-					return
+					return false
 				}
 
 				typ := pass.TypesInfo.TypeOf(xIdent)
 				if typ == nil {
-					return
+					return false
 				}
 
 				if named, ok := typ.(*types.Named); ok {
 					obj := named.Obj()
 					pkg := obj.Pkg()
 					if pkg == nil || pkg.Path() != optsPkgName {
-						return
+						return false
 					}
 				}
 
 				pass.Reportf(node.Pos(), "Struct field CursorType.%s is not supported by the MongoDB Stable API", selExpr.Sel.Name)
 			}
 		}
+		return false
 	})
 
 	return nil, nil
@@ -268,7 +265,7 @@ func pkgPathDotTypeAndFunction(pass *analysis.Pass, call *ast.CallExpr) (string,
 	return typStr, selExpr.Sel.Name
 }
 
-func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
+func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr, stack []ast.Node) {
 	//fmt.Println("In analyzeRunCommand")
 	// Get the command argument (second argument)
 	if len(call.Args) < 2 {
@@ -292,7 +289,7 @@ func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
 			if isBsonDType(pass.TypesInfo.ObjectOf(ident).Type()) {
 				//fmt.Println("isBsonDType")
 				// Find the variable declaration and analyze its value
-				if assignStmt := findVariableAssignment(pass, ident); assignStmt != nil {
+				if assignStmt := findVariableAssignment(pass, ident, stack); assignStmt != nil {
 					//fmt.Println("assignStmt != nil")
 					if bsonDLit, ok := assignStmt.Rhs[0].(*ast.CompositeLit); ok {
 						//fmt.Println("analyzeCommandLiteral 2")
@@ -307,13 +304,77 @@ func analyzeRunCommand(pass *analysis.Pass, call *ast.CallExpr) {
 }
 
 func isBsonDType(typ types.Type) bool {
-	// Check if the type is bson.D or a compatible type
-	// You can customize this based on your specific requirements
 	//fmt.Printf("typ: %v\n", typ.String())
 	return typ.String() == "bson.D" || typ.String() == "go.mongodb.org/mongo-driver/bson/primitive.D"
 }
 
-func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident) *ast.AssignStmt {
+func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident, stack []ast.Node) *ast.AssignStmt {
+	var assignStmt *ast.AssignStmt
+
+	/*
+		fmt.Println("Stack")
+		for _, stackNode := range stack {
+			fmt.Printf("%T\n", stackNode)
+			//ast.Print(nil, stackNode)
+		}
+		fmt.Println("End Stack")
+
+		for i := len(stack) - 1; i >= 0; i-- {
+			fmt.Printf("%T\n", stack[i])
+		}
+		fmt.Println("End Reverse")
+	*/
+
+	// Search for the assignment, going up the call stack until found
+	for i := len(stack) - 1; i >= 0; i-- {
+		//fmt.Printf("%T\n", stack[i])
+
+		ast.Inspect(stack[i], func(node ast.Node) bool {
+			switch stmt := node.(type) {
+			case *ast.AssignStmt:
+				for _, lhs := range stmt.Lhs {
+					if lhsIdent, ok := lhs.(*ast.Ident); ok && lhsIdent.Name == ident.Name {
+						assignStmt = stmt
+						return false
+					}
+				}
+			}
+			return true
+		})
+
+		if assignStmt != nil {
+			break
+		}
+	}
+
+	// The previous loop ended with the ast.File containing the runCommand call.
+	// If an assignment of the command variable was not found in that file, the following
+	// looks for that declaration in all Files. Note that this might find some false positives.
+	if assignStmt == nil {
+		for _, file := range pass.Files {
+			ast.Inspect(file, func(node ast.Node) bool {
+				switch stmt := node.(type) {
+				case *ast.AssignStmt:
+					for _, lhs := range stmt.Lhs {
+						if lhsIdent, ok := lhs.(*ast.Ident); ok && lhsIdent.Name == ident.Name {
+							assignStmt = stmt
+							return false
+						}
+					}
+				}
+				return true
+			})
+
+			if assignStmt != nil {
+				break
+			}
+		}
+	}
+
+	return assignStmt
+}
+
+func findVariableAssignment_save(pass *analysis.Pass, ident *ast.Ident) *ast.AssignStmt {
 	var assignStmt *ast.AssignStmt
 
 	// Find the function declaration containing the identifier
