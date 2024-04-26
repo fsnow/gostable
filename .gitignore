@@ -25,3 +25,5 @@ gostable
 testdata/stable/stable
 
 testdata/unstable/unstable
+
+.DS_Store

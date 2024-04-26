@@ -18,7 +18,7 @@ const fullDbPkg = mongoPkgName + ".Database"
 
 const optsPkgName = "go.mongodb.org/mongo-driver/mongo/options"
 
-var Analyzer = &analysis.Analyzer{
+var StableAnalyzer = &analysis.Analyzer{
 	Name: "gostable",
 	Doc:  "ensures that all MongoDB go driver code adheres to the Stable API",
 	Run:  run,
