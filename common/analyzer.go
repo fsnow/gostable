@@ -126,7 +126,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 		switch x := node.(type) {
 
-		// look for any of the restricted aggregation stages as a string
+		// Look for any of the restricted aggregation stages as a string.
+		// The strings are sufficiently specific that this is not likely to have false positives,
+		// i.e. same string but not the MongoDB agg stage.
 		case *ast.BasicLit:
 			if x.Kind == token.STRING {
 				//fmt.Printf("string value: %v\n", x.Value)
@@ -137,14 +139,17 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				}
 			}
 
-		// loop over all function calls and check against unstableFunctions map
+		// Look at all function calls
 		case *ast.CallExpr:
 			call := node.(*ast.CallExpr)
 			callPkgName, callFnName := pkgPathDotTypeAndFunction(pass, call)
+			// Make a general warning about direct use of RunCommand. We might not catch all possible unsupported command constructions.
 			if (callPkgName == fullClientPkg || callPkgName == fullDbPkg) && callFnName == "RunCommand" {
 				pass.Reportf(call.Pos(), "Any use of RunCommand should be reviewed against the MongoDB Stable API command list")
+				// and also try to find the actual command passed to RunCommand
 				analyzeRunCommand(pass, call, stack)
 			} else {
+				// Check against unstableFunctions map
 				for pkg, driverFnMap := range unstableFunctions {
 					for driverType, fnNames := range driverFnMap {
 						for _, fnName := range fnNames {
@@ -157,7 +162,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				}
 			}
 
-		// look for any unsupported struct fields
+		// Look for any unsupported struct fields.
+		// We will assume that simply referring to them or setting them is unsupported.
 		case *ast.CompositeLit:
 			compLit, ok := node.(*ast.CompositeLit)
 			if !ok {
@@ -191,6 +197,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				}
 			}
 
+		// Look for unsupported cursor types
 		case *ast.SelectorExpr:
 			selExpr := node.(*ast.SelectorExpr)
 
