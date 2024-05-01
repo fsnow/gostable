@@ -1,0 +1,1 @@
+gostable/testdata/stable/dbRunCmdCount.go:23:9: Any use of RunCommand should be reviewed against the MongoDB Stable API command list

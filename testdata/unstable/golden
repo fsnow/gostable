@@ -1,0 +1,31 @@
+gostable/testdata/unstable/clientWatch.go:18:23: Function Client.Watch is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:19:5: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:52:4: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:85:11: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:86:10: Aggregation stage '$indexStats' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:119:5: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:153:10: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collAggUnstable.go:185:9: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collDistinct.go:18:17: Function Collection.Distinct is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:16:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:17:2: Function FindOptions.SetNoCursorTimeout is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:43:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:71:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:98:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:125:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:158:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:192:46: Struct field CursorType.TailableAwait is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:21:3: Struct field FindOneOptions.Max is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:22:3: Struct field FindOneOptions.MaxAwaitTime is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:23:3: Struct field FindOneOptions.Min is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:24:3: Struct field FindOneOptions.NoCursorTimeout is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:25:3: Struct field FindOneOptions.OplogReplay is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:26:3: Struct field FindOneOptions.ReturnKey is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFindOne.go:27:3: Struct field FindOneOptions.ShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collSearchIndexes.go:16:21: Function Collection.SearchIndexes is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collWatch.go:20:23: Function Collection.Watch is not supported by the MongoDB Stable API
+gostable/testdata/unstable/dbRunCmdDistinct.go:26:9: Any use of RunCommand should be reviewed against the MongoDB Stable API command list
+gostable/testdata/unstable/dbRunCmdDistinct.go:20:3: Command distinct is not supported by the MongoDB Stable API
+gostable/testdata/unstable/dbRunCmdDistinct.go:55:9: Any use of RunCommand should be reviewed against the MongoDB Stable API command list
+gostable/testdata/unstable/dbRunCmdDistinct.go:48:3: Command distinct is not supported by the MongoDB Stable API
+gostable/testdata/unstable/dbWatch.go:20:23: Function Database.Watch is not supported by the MongoDB Stable API
