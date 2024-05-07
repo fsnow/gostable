@@ -93,8 +93,7 @@ func find3() {
 func find4() {
 	collection := client.Database("mydatabase").Collection("mycollection")
 
-	var findOptions *options.FindOptions
-	findOptions = options.Find()
+	findOptions := options.Find()
 	findOptions.SetShowRecordID(true)
 	findOptions.SetSort(bson.D{{"name", 1}})
 

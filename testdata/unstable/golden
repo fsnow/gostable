@@ -11,10 +11,10 @@ gostable/testdata/unstable/collFind.go:16:2: Function FindOptions.SetShowRecordI
 gostable/testdata/unstable/collFind.go:17:2: Function FindOptions.SetNoCursorTimeout is not supported by the MongoDB Stable API
 gostable/testdata/unstable/collFind.go:43:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
 gostable/testdata/unstable/collFind.go:71:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
-gostable/testdata/unstable/collFind.go:98:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
-gostable/testdata/unstable/collFind.go:125:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
-gostable/testdata/unstable/collFind.go:158:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
-gostable/testdata/unstable/collFind.go:192:46: Struct field CursorType.TailableAwait is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:97:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:124:3: Struct field FindOptions.ShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:157:2: Function FindOptions.SetShowRecordID is not supported by the MongoDB Stable API
+gostable/testdata/unstable/collFind.go:191:46: Struct field CursorType.TailableAwait is not supported by the MongoDB Stable API
 gostable/testdata/unstable/collFindOne.go:21:3: Struct field FindOneOptions.Max is not supported by the MongoDB Stable API
 gostable/testdata/unstable/collFindOne.go:22:3: Struct field FindOneOptions.MaxAwaitTime is not supported by the MongoDB Stable API
 gostable/testdata/unstable/collFindOne.go:23:3: Struct field FindOneOptions.Min is not supported by the MongoDB Stable API
