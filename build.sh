@@ -1,3 +1,3 @@
 go mod tidy
-go build -buildmode=plugin -o gostable.so ./staticcheck
-go build -o gostable ./golangcilint
+go build -buildmode=plugin -o gostable.so ./plugin
+go build -o gostable ./standalone
