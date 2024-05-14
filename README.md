@@ -9,16 +9,15 @@ Also handled in the CallExpr case, we flag all calls to RunCommand. The actual c
 ### Structs
 All references to unsupported struct fields are flagged. This is also [configuration driven](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L52). In the tree descent this is the [\*ast.CompositeLit case](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L158).
 ### Aggregation Stages
-The unsupported aggregation stages are sufficiently unique that we take a shortcut, flagging string matching the [stage names](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L68). The list of stages is here. The [\*ast.BasicLit case](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L123) handles this string matching.
-
+The unsupported aggregation stages are sufficiently unique that we take a shortcut, flagging any string matching the [stage names](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L68). The list of stages is here. The [\*ast.BasicLit case](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L123) handles this string matching.
+### Cursor Types
+Use of Tailable and TailableAwait cursors are handled in the [\*ast.SelectorExpr case](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L192).
 # Build
 ```
 ./build.sh
 ```
-
 # Test
 ```
 ./test.sh
 ```
-
 There are two projects under testdata: stable and unstable. The expected output from the linter is in the 2 "golden" files. The test script compares the linter output against these files.
