@@ -1,7 +1,0 @@
-unstable/collAggUnstable.go:19:5: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:52:4: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:85:11: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:86:10: Aggregation stage '$indexStats' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:119:5: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:153:10: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
-unstable/collAggUnstable.go:185:9: Aggregation stage '$currentOp' is not supported by the MongoDB Stable API
