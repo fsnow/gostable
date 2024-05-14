@@ -4,7 +4,7 @@ go 1.21
 
 toolchain go1.22.2
 
-require golang.org/x/tools v0.20.0
+require golang.org/x/tools v0.21.0
 
 require (
 	golang.org/x/mod v0.17.0 // indirect
