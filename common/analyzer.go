@@ -104,15 +104,6 @@ var stableCommands = []string{"count", "abortTransaction", "authenticate", "bulk
 func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
-	/*
-		if isPkgDotFunction(pass, call, mongoCollection, "Aggregate") {
-			fmt.Println("\nPreorder, Aggregate")
-			if hasRestrictedStages(pass, call, restrictedStages, restrictedOperators) {
-				pass.Reportf(call.Pos(), "usage of restricted pipeline stages detected")
-			}
-		}
-	*/
-
 	nodeFilter := []ast.Node{
 		(*ast.BasicLit)(nil),
 		(*ast.CallExpr)(nil),
@@ -318,6 +309,7 @@ func isBsonDType(typ types.Type) bool {
 func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident, stack []ast.Node) *ast.AssignStmt {
 	var assignStmt *ast.AssignStmt
 
+	// debugging, print out stack
 	/*
 		fmt.Println("Stack")
 		for _, stackNode := range stack {
@@ -381,88 +373,6 @@ func findVariableAssignment(pass *analysis.Pass, ident *ast.Ident, stack []ast.N
 	return assignStmt
 }
 
-func findVariableAssignment_save(pass *analysis.Pass, ident *ast.Ident) *ast.AssignStmt {
-	var assignStmt *ast.AssignStmt
-
-	// Find the function declaration containing the identifier
-	funcDecl := findFunctionDeclaration(pass, ident)
-
-	// First, search for the assignment statement within the function
-	if funcDecl != nil {
-		ast.Inspect(funcDecl, func(node ast.Node) bool {
-			switch stmt := node.(type) {
-			case *ast.AssignStmt:
-				for _, lhs := range stmt.Lhs {
-					if lhsIdent, ok := lhs.(*ast.Ident); ok && lhsIdent.Name == ident.Name {
-						assignStmt = stmt
-						return false
-					}
-				}
-			}
-			return true
-		})
-	}
-
-	// If the assignment statement is not found within the function, search in outer scopes
-	if assignStmt == nil {
-		for _, file := range pass.Files {
-			ast.Inspect(file, func(node ast.Node) bool {
-				switch stmt := node.(type) {
-				case *ast.AssignStmt:
-					for _, lhs := range stmt.Lhs {
-						if lhsIdent, ok := lhs.(*ast.Ident); ok && lhsIdent.Name == ident.Name {
-							assignStmt = stmt
-							return false
-						}
-					}
-				}
-				return true
-			})
-
-			if assignStmt != nil {
-				break
-			}
-		}
-	}
-
-	return assignStmt
-}
-
-func findFunctionDeclaration(pass *analysis.Pass, ident *ast.Ident) *ast.FuncDecl {
-	var funcDecl *ast.FuncDecl
-
-	// Find the function declaration containing the identifier
-	for _, file := range pass.Files {
-		ast.Inspect(file, func(node ast.Node) bool {
-			if fd, ok := node.(*ast.FuncDecl); ok {
-				if containsIdent(fd, ident) {
-					funcDecl = fd
-					return false
-				}
-			}
-			return true
-		})
-
-		if funcDecl != nil {
-			break
-		}
-	}
-
-	return funcDecl
-}
-
-func containsIdent(node ast.Node, ident *ast.Ident) bool {
-	var found bool
-	ast.Inspect(node, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && id.Name == ident.Name {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
-}
-
 func analyzeCommandLiteral(pass *analysis.Pass, x *ast.CompositeLit) {
 	//fmt.Println("Inside analyzeCommandLiteral")
 
@@ -491,10 +401,7 @@ func analyzeCommandLiteral(pass *analysis.Pass, x *ast.CompositeLit) {
 									if commandName != "" {
 										if isStableCommand(commandName) {
 											//fmt.Printf("Stable: %v\n", commandName)
-											// Perform further analysis on the value if needed
-											// You can customize this based on your specific requirements
 										} else {
-											// Report a violation if the command is not stable
 											pass.Reportf(compositeElt.Pos(), "Command %s is not supported by the MongoDB Stable API", commandName)
 										}
 									}
@@ -583,160 +490,4 @@ func isPkgDotFunction(pass *analysis.Pass, call *ast.CallExpr, packagePath, func
 	}
 
 	return false
-}
-
-// ---------------------------------------------------
-// Might use this stuff later...
-// ---------------------------------------------------
-
-func hasRestrictedStages(pass *analysis.Pass, call *ast.CallExpr, restrictedStages []string, restrictedOperators map[string][]string) bool {
-	for _, arg := range call.Args {
-		var bsonDocs []*ast.CompositeLit
-
-		switch arg := arg.(type) {
-		case *ast.Ident:
-			bsonDocs = findPipelineVariable(pass, arg.Name, call.Pos())
-			//fmt.Println("ast.Ident case")
-			//fmt.Printf("len: %v\n", len(bsonDocs))
-		case *ast.CompositeLit:
-			if arg.Type == nil {
-				bsonDocs = extractBSONDocs(arg.Elts)
-				//fmt.Println("ast.CompositeLit case, if")
-			} else if ident, ok := arg.Type.(*ast.ArrayType); ok && ident.Elt != nil {
-				if _, ok := ident.Elt.(*ast.StructType); ok {
-					bsonDocs = extractBSONDocs(arg.Elts)
-					//fmt.Println("ast.CompositeLit case, else if if")
-				}
-			}
-		case *ast.CallExpr:
-			if sel, ok := arg.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Pipeline" {
-				bsonDocs = extractBSONDocsFromPipeline(arg.Args)
-				//fmt.Println("ast.CallExpr case")
-			}
-		}
-
-		for _, bsonDoc := range bsonDocs {
-			if hasRestrictedStagesInDoc(bsonDoc, restrictedStages, restrictedOperators) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func findPipelineVariable(pass *analysis.Pass, varName string, pos token.Pos) []*ast.CompositeLit {
-	var bsonDocs []*ast.CompositeLit
-
-	//fmt.Printf("findPipelineVariable, varName=%v\n", varName)
-	//fmt.Printf("pass.Files len: %v\n", len(pass.Files))
-
-	var spec *ast.ValueSpec
-	for _, file := range pass.Files {
-		ast.Inspect(file, func(n ast.Node) bool {
-			if n == nil || n.Pos() > pos {
-				return false
-			}
-			switch n := n.(type) {
-			case *ast.ValueSpec:
-				for _, name := range n.Names {
-					if name.Name == varName {
-						spec = n
-						return false
-					}
-				}
-			case *ast.AssignStmt:
-				for _, lhs := range n.Lhs {
-					if ident, ok := lhs.(*ast.Ident); ok && ident.Name == varName {
-						if len(n.Rhs) == 1 {
-							if compositeLit, ok := n.Rhs[0].(*ast.CompositeLit); ok {
-								//fmt.Println("before append 1")
-								bsonDocs = append(bsonDocs, extractBSONDocs(compositeLit.Elts)...)
-							}
-						}
-						return false
-					}
-				}
-			}
-			return true
-		})
-		if spec != nil {
-			break
-		}
-	}
-
-	if spec != nil {
-		for _, value := range spec.Values {
-			if compositeLit, ok := value.(*ast.CompositeLit); ok {
-				//fmt.Println("before append 2")
-				bsonDocs = append(bsonDocs, extractBSONDocs(compositeLit.Elts)...)
-			}
-		}
-	}
-
-	return bsonDocs
-}
-
-func hasRestrictedStagesInDoc(bsonDoc *ast.CompositeLit, restrictedStages []string, restrictedOperators map[string][]string) bool {
-	for _, elt := range bsonDoc.Elts {
-		if kv, ok := elt.(*ast.KeyValueExpr); ok {
-			if key, ok := kv.Key.(*ast.BasicLit); ok {
-				stageName := strings.Trim(key.Value, "\"")
-
-				// Check if the stage is prohibited
-				for _, stage := range restrictedStages {
-					if stageName == stage {
-						return true
-					}
-				}
-
-				// Check if the stage has restricted operators
-				if restrictedOperators, ok := restrictedOperators[stageName]; ok {
-					if bsonDoc, ok := kv.Value.(*ast.CompositeLit); ok {
-						for _, elt := range bsonDoc.Elts {
-							if kv, ok := elt.(*ast.KeyValueExpr); ok {
-								if key, ok := kv.Key.(*ast.BasicLit); ok {
-									operatorName := strings.Trim(key.Value, "\"")
-
-									for _, operator := range restrictedOperators {
-										if operatorName == operator {
-											return true
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-func extractBSONDocs(elts []ast.Expr) []*ast.CompositeLit {
-	var bsonDocs []*ast.CompositeLit
-	for _, elt := range elts {
-		if bsonDoc, ok := elt.(*ast.CompositeLit); ok {
-			bsonDocs = append(bsonDocs, bsonDoc)
-		}
-	}
-	return bsonDocs
-}
-
-func extractBSONDocsFromPipeline(args []ast.Expr) []*ast.CompositeLit {
-	var bsonDocs []*ast.CompositeLit
-	for _, arg := range args {
-		if unaryExpr, ok := arg.(*ast.UnaryExpr); ok {
-			if callExpr, ok := unaryExpr.X.(*ast.CallExpr); ok {
-				if len(callExpr.Args) == 1 {
-					if bsonDoc, ok := callExpr.Args[0].(*ast.CompositeLit); ok {
-						bsonDocs = append(bsonDocs, bsonDoc)
-					}
-				}
-			} else if bsonDoc, ok := unaryExpr.X.(*ast.CompositeLit); ok {
-				bsonDocs = append(bsonDocs, bsonDoc)
-			}
-		}
-	}
-	return bsonDocs
 }
