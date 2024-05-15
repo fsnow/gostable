@@ -10,7 +10,7 @@ An easy case, this is driven by a [map of maps](https://github.com/fsnow/gostabl
 
 ### RunCommand
 
-Also handled in the CallExpr case, we flag all calls to RunCommand. The actual command is the first field name of the bson.D passed as the 2nd argument to RunCommand. A future modification is to *not* flag RunCommand where the command is successfully identified and is supported by the Stable API. See [analyzeRunCommand](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L266) for our attempt to find the command construction.
+Also handled in the CallExpr case, we flag all calls to RunCommand. The actual command is the first field name of the bson.D passed as the 2nd argument to RunCommand. A future modification is to *not* flag RunCommand where the command is successfully identified and is supported by the Stable API. See [analyzeRunCommand](https://github.com/fsnow/gostable/blob/0bd607bc7c09485dd59d03e7e50a4a9a00a030c0/common/analyzer.go#L266) for our attempt to find the command construction, which is limited to the same file where RunCommand is called.
 
 ### Structs
 
